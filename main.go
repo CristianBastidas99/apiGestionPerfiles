@@ -127,6 +127,60 @@ func deleteProfileHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Perfil eliminado exitosamente"))
 }
 
+func createUserProfileFromRegistration(userID int) error {
+	// Aquí puedes obtener información adicional del usuario si es necesario
+	// por ejemplo, haciendo una llamada a la base de datos de usuarios registrados
+
+	// Crea un perfil básico para el nuevo usuario
+	newProfile := profile.UserProfile{
+		UserID:        userID,
+		URL:           "",
+		Nickname:      "",
+		ContactPublic: false,
+		Address:       "",
+		Biography:     "",
+		Organization:  "",
+		Country:       "",
+		SocialLinks:   []string{},
+	}
+
+	// Crea el perfil para el usuario recién registrado
+	_, err := profile.CreateUserProfile(newProfile)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func registrationWebhookHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var registrationInfo struct {
+		UserID int `json:"userID"`
+		// Otros campos relevantes del registro, si los hay
+	}
+
+	err := json.NewDecoder(r.Body).Decode(&registrationInfo)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Crear un perfil para el nuevo usuario
+	err = createUserProfileFromRegistration(registrationInfo.UserID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Perfil creado para el nuevo usuario"))
+}
+
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Solicitud recibida: %s %s", r.Method, r.URL.Path)
@@ -142,6 +196,9 @@ func main() {
 	router.HandleFunc("/update-profile", updateProfileHandler)
 	router.HandleFunc("/get-profile", getProfileHandler)
 	router.HandleFunc("/delete-profile", deleteProfileHandler)
+
+	// Manejador para el webhook de registro de usuarios
+	router.HandleFunc("/registration-webhook", registrationWebhookHandler)
 
 	// Aplicar middleware para registrar invocaciones al servicio
 	loggedRouter := loggingMiddleware(router)

@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  profile-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mysql-db-ps
+
+  mysql-db-ps:
+    image: mysql:5.7
+    environment:
+      MYSQL_ROOT_PASSWORD: 12345
+      MYSQL_DATABASE: apigetway
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro  # Montar el archivo init.sql al contenedor de MySQL
+      - mysql-data:/var/lib/mysql
+
+volumes:
+  mysql-data:
+    driver: local

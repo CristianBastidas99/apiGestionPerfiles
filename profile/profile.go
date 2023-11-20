@@ -2,6 +2,7 @@ package profile
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -28,7 +29,8 @@ const (
 )
 
 func getDBConnection() (*sql.DB, error) {
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@/%s", username, password, dbname))
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(mysql-db-ps:3306)/%s", username, password, dbname))
+	//db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@/%s", username, password, dbname))
 	if err != nil {
 		return nil, err
 	}
@@ -36,6 +38,12 @@ func getDBConnection() (*sql.DB, error) {
 }
 
 func CreateUserProfile(profile UserProfile) (int64, error) {
+
+	// Verificar si UserID está presente
+	if profile.UserID == 0 {
+		return 0, errors.New("UserID is missing")
+	}
+
 	db, err := getDBConnection()
 	if err != nil {
 		return 0, err
