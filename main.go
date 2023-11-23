@@ -22,6 +22,11 @@ func main() {
 	// Manejador para el webhook de registro de usuarios
 	router.HandleFunc("/registration-webhook", handlers.RegistrationWebhookHandler)
 
+	// Rutas de servicio de salud
+	router.HandleFunc("/health", handlers.HealthCheckHandler)
+	router.HandleFunc("/health/ready", handlers.ReadyCheckHandler)
+	router.HandleFunc("/health/live", handlers.LiveCheckHandler)
+
 	conn, err := amqp.Dial(logger.AmqpURI)
 	logger.FailOnError(err, "Failed to connect to RabbitMQ")
 	defer conn.Close()

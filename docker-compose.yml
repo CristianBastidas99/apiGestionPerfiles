@@ -11,11 +11,22 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - "8082:8080"
     depends_on:
       - mysql-db-ps
       - rabbitmq
     #command: ["./wait-for-it.sh","mysql_db:3306","-t","50","--","java", "-jar", "taller_ms-0.0.1-SNAPSHOT.jar"]
+    networks:
+      - net_apigest
+
+  api-getway:
+    build: 
+      context: ../apiGetwayTrue
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      - profile-service
     networks:
       - net_apigest
 
