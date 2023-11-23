@@ -1,5 +1,10 @@
 version: '3.8'
 
+# ---------------------------------- Redes
+networks:
+  net_apigest:
+    #driver: bridge
+
 services:
   profile-service:
     build:
@@ -9,6 +14,22 @@ services:
       - "8080:8080"
     depends_on:
       - mysql-db-ps
+      - rabbitmq
+    #command: ["./wait-for-it.sh","mysql_db:3306","-t","50","--","java", "-jar", "taller_ms-0.0.1-SNAPSHOT.jar"]
+    networks:
+      - net_apigest
+
+  rabbitmq:
+    image: rabbitmq:3.13-rc-management
+    container_name: rabbitmq
+    #restart: always
+    #tty: true
+    #stdin_open: true
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+    networks:
+      - net_apigest
 
   mysql-db-ps:
     image: mysql:5.7
@@ -20,6 +41,8 @@ services:
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro  # Montar el archivo init.sql al contenedor de MySQL
       - mysql-data:/var/lib/mysql
+    networks:
+      - net_apigest
 
 volumes:
   mysql-data:

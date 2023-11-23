@@ -3,7 +3,7 @@ package test
 import (
 	"testing"
 
-	"github.com/CristianBastidas99/apiGetwayGo/profile"
+	"github.com/CristianBastidas99/profile-service/profile"
 )
 
 func TestCreateUserProfile(t *testing.T) {

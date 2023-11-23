@@ -6,8 +6,10 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
-	"github.com/CristianBastidas99/apiGetwayGo/profile"
+	"github.com/CristianBastidas99/profile-service/profile"
+	"github.com/streadway/amqp"
 )
 
 func updateProfileHandler(w http.ResponseWriter, r *http.Request) {
@@ -181,14 +183,95 @@ func registrationWebhookHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Perfil creado para el nuevo usuario"))
 }
 
-func loggingMiddleware(next http.Handler) http.Handler {
+func loggingMiddleware(next http.Handler, conn *amqp.Connection) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("Solicitud recibida: %s %s", r.Method, r.URL.Path)
+		// Record the request details for logging
+		requestInfo := LogMessage{
+			AppGener:    "profile_service",
+			Tipo:        r.Method,
+			ClaseModelo: r.URL.Path,
+			FechaHora:   time.Now().Format("2006-01-02 15:04:05"),
+			Resumen:     fmt.Sprintf("Received request: %s %s", r.Method, r.URL.Path),
+		}
+
+		// Proceed with the request
 		next.ServeHTTP(w, r)
+
+		// Create a response log message
+		responseInfo := LogMessage{
+			AppGener:    "profile_service",
+			Tipo:        r.Method,
+			ClaseModelo: r.URL.Path,
+			FechaHora:   time.Now().Format("2006-01-02 15:04:05"),
+			Resumen:     fmt.Sprintf("Processed request: %s %s", r.Method, r.URL.Path),
+			Descripcion: fmt.Sprintf("Status code: %d" /*, w.StatusCode*/),
+		}
+
+		// Marshal the log messages to JSON format
+		requestJSON, err := json.Marshal(requestInfo)
+		if err != nil {
+			log.Println("Error marshalling request log message:", err)
+		}
+
+		responseJSON, err := json.Marshal(responseInfo)
+		if err != nil {
+			log.Println("Error marshalling response log message:", err)
+		}
+
+		// Send the log messages to the RabbitMQ queue
+		ch, err := conn.Channel()
+		if err != nil {
+			log.Println("Error opening channel:", err)
+		}
+		defer ch.Close()
+
+		err = ch.Publish(
+			"",
+			"cola_1",
+			false,
+			false,
+			amqp.Publishing{
+				ContentType: "application/json",
+				Body:        requestJSON,
+			},
+		)
+		if err != nil {
+			log.Println("Error publishing request log message:", err)
+		}
+
+		err = ch.Publish(
+			"",
+			"cola_1",
+			false,
+			false,
+			amqp.Publishing{
+				ContentType: "application/json",
+				Body:        responseJSON,
+			},
+		)
+		if err != nil {
+			log.Println("Error publishing response log message:", err)
+		}
 	})
 }
 
+func failOnError(err error, msg string) {
+	if err != nil {
+		log.Fatalf("%s: %s", msg, err)
+	}
+}
+
+type LogMessage struct {
+	AppGener    string
+	Tipo        string
+	ClaseModelo string
+	FechaHora   string
+	Resumen     string
+	Descripcion string
+}
+
 func main() {
+
 	router := http.NewServeMux()
 
 	// Manejador para actualizar el perfil
@@ -200,9 +283,41 @@ func main() {
 	// Manejador para el webhook de registro de usuarios
 	router.HandleFunc("/registration-webhook", registrationWebhookHandler)
 
-	// Aplicar middleware para registrar invocaciones al servicio
-	loggedRouter := loggingMiddleware(router)
+	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/")
+	failOnError(err, "Failed to connect to RabbitMQ")
+	defer conn.Close()
 
-	log.Println("Servidor iniciado en http://localhost:8080")
+	ch, err := conn.Channel()
+	failOnError(err, "Failed to open a channel")
+	defer ch.Close()
+
+	q, err := ch.QueueDeclare(
+		"cola_1", // name
+		false,    // durable
+		false,    // delete when unused
+		false,    // exclusive
+		false,    // no-wait
+		nil,      // arguments
+	)
+
+	failOnError(err, "Failed to declare a queue")
+
+	body := "Hello World!"
+	err = ch.Publish(
+		"",     // exchange
+		q.Name, // routing key
+		false,  // mandatory
+		false,  // immediate
+		amqp.Publishing{
+			ContentType: "text/plain",
+			Body:        []byte(body),
+		})
+	failOnError(err, "Failed to publish a message")
+	log.Printf(" [x] Sent %s", body)
+
+	// Aplicar middleware para registrar invocaciones al servicio
+	loggedRouter := loggingMiddleware(router, conn)
+
+	log.Println("Servidor gestion de  iniciado en http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", loggedRouter))
 }
